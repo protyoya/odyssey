@@ -4,8 +4,19 @@ require('dotenv').config();
 
 const app = express();
 
-// Middleware
+
 app.use(express.json());
+
+const cors = require('cors');
+const corsOptions = {
+  origin: [
+    'http://localhost:5000',
+    'http://localhost:5200'
+  ],
+  credentials: true,
+};
+app.use(cors(corsOptions));
+
 
 // Suppress Mongoose strictQuery warning
 mongoose.set('strictQuery', true);
@@ -13,8 +24,11 @@ mongoose.set('strictQuery', true);
 // --------- ROUTES START --------- //
 
 
-// const userRoutes = require('./routes/userRoutes');
-// app.use('/api/users', userRoutes);
+ const AuthoritiesSignup = require('./Routes/Authorities/signup');
+ const AuthoritiesLogin = require('./Routes/Authorities/login');
+
+app.use('/api/auth/authorities', AuthoritiesSignup);
+app.use('/api/auth/authorities', AuthoritiesLogin);
 
 
 // --------- ROUTES END --------- //
