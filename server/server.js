@@ -26,9 +26,11 @@ mongoose.set('strictQuery', true);
 
  const AuthoritiesSignup = require('./Routes/Authorities/signup');
  const AuthoritiesLogin = require('./Routes/Authorities/login');
+ const AuthoritiesAdmin = require('./Routes/Authorities/admin/authorities');
 
 app.use('/api/auth/authorities', AuthoritiesSignup);
 app.use('/api/auth/authorities', AuthoritiesLogin);
+app.use('/api/authorities', AuthoritiesAdmin);
 
 
 // --------- ROUTES END --------- //
