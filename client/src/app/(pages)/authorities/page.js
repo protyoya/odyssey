@@ -18,8 +18,10 @@ import {
   CheckCircle,
   XCircle,
   Pause,
-  RefreshCw
+  RefreshCw,
+  RotateCcw
 } from 'lucide-react';
+import ProtectedRoute from '@/components/ProtectedRoute';
 
 export default function AuthorityManagement() {
   const [authorities, setAuthorities] = useState([]);
@@ -31,6 +33,7 @@ export default function AuthorityManagement() {
   const [selectedAuthority, setSelectedAuthority] = useState(null);
   const [showDetailModal, setShowDetailModal] = useState(false);
   const [actionLoading, setActionLoading] = useState(null);
+  const [showActionDropdown, setShowActionDropdown] = useState(null);
 
   // Fetch authorities data
   useEffect(() => {
@@ -95,7 +98,8 @@ export default function AuthorityManagement() {
       const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5000';
       const token = localStorage.getItem('authToken');
       
-      const response = await fetch(`${backendUrl}/api/admin/authorities/${authorityId}/status`, {
+      // Fixed URL to match the backend route
+      const response = await fetch(`${backendUrl}/api/authorities/administration/authorities/${authorityId}/status`, {
         method: 'PATCH',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -113,6 +117,8 @@ export default function AuthorityManagement() {
               : auth
           )
         );
+        // Close dropdown after action
+        setShowActionDropdown(null);
       } else {
         console.error('Failed to update authority status');
       }
@@ -181,7 +187,40 @@ export default function AuthorityManagement() {
     });
   };
 
+  const getAvailableActions = (authority) => {
+    const actions = [];
+    
+    switch (authority.status) {
+      case 'pending':
+        actions.push(
+          { label: 'Approve', action: 'approved', icon: Check, color: 'text-green-400' },
+          { label: 'Reject', action: 'rejected', icon: X, color: 'text-red-400' }
+        );
+        break;
+      case 'approved':
+        actions.push(
+          { label: 'Suspend', action: 'suspended', icon: Pause, color: 'text-orange-400' }
+        );
+        break;
+      case 'suspended':
+        actions.push(
+          { label: 'Reactivate', action: 'approved', icon: RotateCcw, color: 'text-green-400' },
+          { label: 'Reject', action: 'rejected', icon: X, color: 'text-red-400' }
+        );
+        break;
+      case 'rejected':
+        actions.push(
+          { label: 'Approve', action: 'approved', icon: Check, color: 'text-green-400' },
+          { label: 'Set Pending', action: 'pending', icon: Clock, color: 'text-yellow-400' }
+        );
+        break;
+    }
+    
+    return actions;
+  };
+
   return (
+    <ProtectedRoute department="administration">
     <>
       <div className="min-h-screen bg-gradient-to-br from-gray-900 via-black to-gray-900 pt-20">
         {/* Background Pattern */}
@@ -351,14 +390,70 @@ export default function AuthorityManagement() {
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">{formatDate(authority.createdAt)}</td>
                         <td className="px-6 py-4 whitespace-nowrap">
                           <div className="flex items-center space-x-2">
-                            <button onClick={() => { setSelectedAuthority(authority); setShowDetailModal(true); }} className="p-2 bg-blue-500/20 hover:bg-blue-500/30 text-blue-400 rounded-lg transition-colors"><Eye className="w-4 h-4" /></button>
+                            {/* View Details Button */}
+                            <button 
+                              onClick={() => { setSelectedAuthority(authority); setShowDetailModal(true); }} 
+                              className="p-2 bg-blue-500/20 hover:bg-blue-500/30 text-blue-400 rounded-lg transition-colors"
+                            >
+                              <Eye className="w-4 h-4" />
+                            </button>
+                            
+                            {/* Quick Actions for Pending */}
                             {authority.status === 'pending' && (
                               <>
-                                <button onClick={() => handleStatusChange(authority._id, 'approved')} disabled={actionLoading === authority._id} className="p-2 bg-green-500/20 hover:bg-green-500/30 text-green-400 rounded-lg transition-colors disabled:opacity-50">
-                                  {actionLoading === authority._id ? <div className="w-4 h-4 border-2 border-white/30 rounded-full border-t-white animate-spin"></div> : <Check className="w-4 h-4" />}
+                                <button 
+                                  onClick={() => handleStatusChange(authority._id, 'approved')} 
+                                  disabled={actionLoading === authority._id} 
+                                  className="p-2 bg-green-500/20 hover:bg-green-500/30 text-green-400 rounded-lg transition-colors disabled:opacity-50"
+                                >
+                                  {actionLoading === authority._id ? 
+                                    <div className="w-4 h-4 border-2 border-white/30 rounded-full border-t-white animate-spin"></div> : 
+                                    <Check className="w-4 h-4" />
+                                  }
                                 </button>
-                                <button onClick={() => handleStatusChange(authority._id, 'rejected')} disabled={actionLoading === authority._id} className="p-2 bg-red-500/20 hover:bg-red-500/30 text-red-400 rounded-lg transition-colors disabled:opacity-50"><X className="w-4 h-4" /></button>
+                                <button 
+                                  onClick={() => handleStatusChange(authority._id, 'rejected')} 
+                                  disabled={actionLoading === authority._id} 
+                                  className="p-2 bg-red-500/20 hover:bg-red-500/30 text-red-400 rounded-lg transition-colors disabled:opacity-50"
+                                >
+                                  <X className="w-4 h-4" />
+                                </button>
                               </>
+                            )}
+                            
+                            {/* More Actions Dropdown for other statuses */}
+                            {authority.status !== 'pending' && (
+                              <div className="relative">
+                                <button 
+                                  onClick={() => setShowActionDropdown(showActionDropdown === authority._id ? null : authority._id)}
+                                  className="p-2 bg-gray-500/20 hover:bg-gray-500/30 text-gray-400 rounded-lg transition-colors"
+                                >
+                                  <MoreVertical className="w-4 h-4" />
+                                </button>
+                                
+                                {showActionDropdown === authority._id && (
+                                  <div className="absolute right-0 top-full mt-1 bg-black/90 backdrop-blur-lg border border-white/20 rounded-lg shadow-lg z-50 min-w-[140px]">
+                                    {getAvailableActions(authority).map((action, index) => {
+                                      const IconComponent = action.icon;
+                                      return (
+                                        <button
+                                          key={index}
+                                          onClick={() => handleStatusChange(authority._id, action.action)}
+                                          disabled={actionLoading === authority._id}
+                                          className={`w-full flex items-center px-3 py-2 text-sm ${action.color} hover:bg-white/10 transition-colors disabled:opacity-50 first:rounded-t-lg last:rounded-b-lg`}
+                                        >
+                                          {actionLoading === authority._id ? (
+                                            <div className="w-4 h-4 border-2 border-white/30 rounded-full border-t-white animate-spin mr-2"></div>
+                                          ) : (
+                                            <IconComponent className="w-4 h-4 mr-2" />
+                                          )}
+                                          {action.label}
+                                        </button>
+                                      );
+                                    })}
+                                  </div>
+                                )}
+                              </div>
                             )}
                           </div>
                         </td>
@@ -380,16 +475,31 @@ export default function AuthorityManagement() {
 
         {/* Detail Modal */}
         {showDetailModal && selectedAuthority && (
-          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div 
+            className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4"
+            onClick={(e) => {
+              if (e.target === e.currentTarget) {
+                setShowDetailModal(false);
+              }
+            }}
+          >
             <div className="bg-black/40 backdrop-blur-lg border border-white/10 rounded-3xl p-6 md:p-8 shadow-2xl shadow-black/40 max-w-2xl w-full max-h-[90vh] overflow-y-auto">
               <div className="flex justify-between items-center mb-6 border-b border-white/10 pb-4">
                 <h2 className="text-xl font-bold text-white">Authority Details</h2>
-                <button onClick={() => setShowDetailModal(false)} className="p-2 hover:bg-white/10 rounded-lg transition-colors"><X className="w-5 h-5 text-gray-400" /></button>
+                <button 
+                  onClick={() => setShowDetailModal(false)} 
+                  className="p-2 hover:bg-white/10 rounded-lg transition-colors"
+                >
+                  <X className="w-5 h-5 text-gray-400" />
+                </button>
               </div>
               <div className="space-y-6">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div className="bg-black/30 backdrop-blur-md border border-white/[.15] rounded-xl p-4">
-                        <div className="flex items-center mb-3"><User className="w-5 h-5 text-blue-400 mr-2" /><h3 className="font-semibold text-white">Personal Information</h3></div>
+                        <div className="flex items-center mb-3">
+                          <User className="w-5 h-5 text-blue-400 mr-2" />
+                          <h3 className="font-semibold text-white">Personal Information</h3>
+                        </div>
                         <div className="space-y-2 text-sm">
                             <p><span className="text-gray-400">Full Name:</span> <span className="text-white">{selectedAuthority.fullName}</span></p>
                             <p><span className="text-gray-400">Email:</span> <span className="text-white">{selectedAuthority.email}</span></p>
@@ -397,7 +507,10 @@ export default function AuthorityManagement() {
                         </div>
                     </div>
                     <div className="bg-black/30 backdrop-blur-md border border-white/[.15] rounded-xl p-4">
-                        <div className="flex items-center mb-3"><Shield className="w-5 h-5 text-green-400 mr-2" /><h3 className="font-semibold text-white">Authority Details</h3></div>
+                        <div className="flex items-center mb-3">
+                          <Shield className="w-5 h-5 text-green-400 mr-2" />
+                          <h3 className="font-semibold text-white">Authority Details</h3>
+                        </div>
                         <div className="space-y-2 text-sm">
                             <p><span className="text-gray-400">Department:</span> <span className="text-white">{getDepartmentName(selectedAuthority.department)}</span></p>
                             <p><span className="text-gray-400">Badge Number:</span> <span className="text-white">{selectedAuthority.badgeNumber}</span></p>
@@ -406,29 +519,66 @@ export default function AuthorityManagement() {
                     </div>
                 </div>
                 <div className="bg-black/30 backdrop-blur-md border border-white/[.15] rounded-xl p-4">
-                  <div className="flex items-center mb-3"><Calendar className="w-5 h-5 text-purple-400 mr-2" /><h3 className="font-semibold text-white">Status & Timeline</h3></div>
+                  <div className="flex items-center mb-3">
+                    <Calendar className="w-5 h-5 text-purple-400 mr-2" />
+                    <h3 className="font-semibold text-white">Status & Timeline</h3>
+                  </div>
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
-                    <div><p className="text-gray-400 mb-1">Current Status</p>{getStatusBadge(selectedAuthority.status)}</div>
-                    <div><p className="text-gray-400 mb-1">Registration Date</p><p className="text-white">{formatDate(selectedAuthority.createdAt)}</p></div>
-                    <div><p className="text-gray-400 mb-1">Last Login</p><p className="text-white">{formatDate(selectedAuthority.lastLogin)}</p></div>
+                    <div>
+                      <p className="text-gray-400 mb-1">Current Status</p>
+                      {getStatusBadge(selectedAuthority.status)}
+                    </div>
+                    <div>
+                      <p className="text-gray-400 mb-1">Registration Date</p>
+                      <p className="text-white">{formatDate(selectedAuthority.createdAt)}</p>
+                    </div>
+                    <div>
+                      <p className="text-gray-400 mb-1">Last Login</p>
+                      <p className="text-white">{formatDate(selectedAuthority.lastLogin)}</p>
+                    </div>
                   </div>
                 </div>
-                {selectedAuthority.status === 'pending' && (
-                  <div className="flex space-x-4">
-                    <button onClick={() => { handleStatusChange(selectedAuthority._id, 'approved'); setShowDetailModal(false); }} className="flex-1 flex items-center justify-center bg-gradient-to-br from-blue-500 to-blue-600 text-white py-3 px-6 rounded-xl font-semibold text-sm transition-all duration-300 ease-in-out cursor-pointer shadow-lg shadow-blue-500/30 hover:-translate-y-0.5 hover:shadow-xl hover:shadow-blue-500/40">
-                      <Check className="w-4 h-4 mr-2" />Approve Authority
-                    </button>
-                    <button onClick={() => { handleStatusChange(selectedAuthority._id, 'rejected'); setShowDetailModal(false); }} className="flex-1 flex items-center justify-center bg-red-600 hover:bg-red-500 text-white px-4 py-2 rounded-xl font-medium transition-colors">
-                      <X className="w-4 h-4 mr-2" />Reject Authority
-                    </button>
-                  </div>
-                )}
+                
+                {/* Action Buttons in Modal */}
+                <div className="flex flex-wrap gap-3">
+                  {getAvailableActions(selectedAuthority).map((action, index) => {
+                    const IconComponent = action.icon;
+                    const isLoading = actionLoading === selectedAuthority._id;
+                    
+                    return (
+                      <button
+                        key={index}
+                        onClick={() => {
+                          handleStatusChange(selectedAuthority._id, action.action);
+                          setShowDetailModal(false);
+                        }}
+                        disabled={isLoading}
+                        className={`flex items-center justify-center px-4 py-2 rounded-xl font-medium text-sm transition-all duration-300 ease-in-out disabled:opacity-50 ${
+                          action.action === 'approved' 
+                            ? 'bg-gradient-to-br from-green-500 to-green-600 text-white shadow-lg shadow-green-500/30 hover:-translate-y-0.5 hover:shadow-xl hover:shadow-green-500/40'
+                            : action.action === 'rejected'
+                            ? 'bg-red-600 hover:bg-red-500 text-white'
+                            : action.action === 'suspended'
+                            ? 'bg-orange-600 hover:bg-orange-500 text-white'
+                            : 'bg-blue-600 hover:bg-blue-500 text-white'
+                        }`}
+                      >
+                        {isLoading ? (
+                          <div className="w-4 h-4 border-2 border-white/30 rounded-full border-t-white animate-spin mr-2"></div>
+                        ) : (
+                          <IconComponent className="w-4 h-4 mr-2" />
+                        )}
+                        {action.label} Authority
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
             </div>
           </div>
         )}
       </div>
     </>
+    </ProtectedRoute>
   );
 }
-
