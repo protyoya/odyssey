@@ -10,8 +10,8 @@ app.use(express.json());
 const cors = require('cors');
 const corsOptions = {
   origin: [
-    'http://localhost:5000',
-    'http://localhost:5200'
+    'http://localhost:5200',
+    'http://localhost:5100',
   ],
   credentials: true,
 };
@@ -27,11 +27,17 @@ mongoose.set('strictQuery', true);
  const AuthoritiesSignup = require('./Routes/Authorities/signup');
  const AuthoritiesLogin = require('./Routes/Authorities/login');
  const AuthoritiesAdmin = require('./Routes/Authorities/admin/authorities');
-
+ const TouristAuth = require('./Routes/Tourist/Auth');
+ const TouristProfile = require('./Routes/Tourist/Profile');
+ const FencingRoutes = require('./Routes/Fencing/fence');
+const placesRoutes = require('./Routes/Places');
 app.use('/api/auth/authorities', AuthoritiesSignup);
 app.use('/api/auth/authorities', AuthoritiesLogin);
 app.use('/api/authorities', AuthoritiesAdmin);
-
+app.use('/api/tourist', TouristAuth);
+app.use('/api/tour/profile', TouristProfile);
+app.use('/api/authorities/fencing', FencingRoutes);
+app.use('/api/places', placesRoutes);
 
 // --------- ROUTES END --------- //
 
