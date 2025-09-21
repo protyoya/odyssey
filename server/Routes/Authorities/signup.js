@@ -3,8 +3,10 @@
 const express = require('express');
 const router = express.Router();
 const Authority = require('../../Models/Authorities/Authority');
+const OTPVerification = require('../../Models/Authorities/OTPVerification');
 const jwt = require('jsonwebtoken');
 const rateLimit = require('express-rate-limit');
+const { generateOTP, sendVerificationEmail } = require('../../config/mailer');
 
 // Rate limiting for signup route
 const signupLimiter = rateLimit({
@@ -196,6 +198,104 @@ router.get('/verify-badge/:badgeNumber', async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Error checking badge number availability'
+    });
+  }
+});
+
+// POST /api/auth/send-verification - Send email verification OTP
+router.post('/send-verification', async (req, res) => {
+  try {
+    const { email, fullName } = req.body;
+
+    if (!email || !fullName) {
+      return res.status(400).json({
+        success: false,
+        message: 'Email and full name are required'
+      });
+    }
+
+    // Validate email format
+    const emailRegex = /^\w+([.-]?\w+)*@\w+([.-]?\w+)*(\.\w{2,3})+$/;
+    if (!emailRegex.test(email)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Please enter a valid email address'
+      });
+    }
+
+    // Generate OTP
+    const otp = generateOTP();
+
+    // Create OTP record in database
+    await OTPVerification.createOTP(email, otp, fullName);
+
+    // Send email
+    await sendVerificationEmail(email, otp, fullName);
+
+    res.json({
+      success: true,
+      message: 'Verification code sent to your email',
+      expiresIn: 600 // 10 minutes in seconds
+    });
+
+  } catch (error) {
+    console.error('Error sending verification email:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to send verification email. Please try again.'
+    });
+  }
+});
+
+// POST /api/auth/verify-otp - Verify email OTP
+router.post('/verify-otp', async (req, res) => {
+  try {
+    const { email, otp } = req.body;
+
+    if (!email || !otp) {
+      return res.status(400).json({
+        success: false,
+        message: 'Email and OTP are required'
+      });
+    }
+
+    // Validate email format
+    const emailRegex = /^\w+([.-]?\w+)*@\w+([.-]?\w+)*(\.\w{2,3})+$/;
+    if (!emailRegex.test(email)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Please enter a valid email address'
+      });
+    }
+
+    // Validate OTP format (4 characters)
+    if (otp.length !== 4) {
+      return res.status(400).json({
+        success: false,
+        message: 'OTP must be exactly 4 characters'
+      });
+    }
+
+    // Verify OTP using the model
+    const result = await OTPVerification.verifyOTP(email, otp);
+
+    if (!result.success) {
+      return res.status(400).json({
+        success: false,
+        message: result.message
+      });
+    }
+
+    res.json({
+      success: true,
+      message: result.message
+    });
+
+  } catch (error) {
+    console.error('Error verifying OTP:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error verifying code. Please try again.'
     });
   }
 });

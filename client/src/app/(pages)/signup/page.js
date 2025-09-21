@@ -1,6 +1,7 @@
 'use client';
 import { useState } from 'react';
 import { Eye, EyeOff, Shield, MapPin, Users, AlertTriangle, CheckCircle, XCircle } from 'lucide-react';
+import EmailVerificationPopup from '../../../components/EmailVerificationPopup';
 
 export default function AuthoritySignup() {
   const [formData, setFormData] = useState({
@@ -19,6 +20,8 @@ export default function AuthoritySignup() {
   const [errors, setErrors] = useState({});
   const [isLoading, setIsLoading] = useState(false);
   const [submitStatus, setSubmitStatus] = useState(null);
+  const [showEmailVerification, setShowEmailVerification] = useState(false);
+  const [emailVerified, setEmailVerified] = useState(false);
 
   // Validation rules
   const validateField = (name, value) => {
@@ -157,8 +160,18 @@ export default function AuthoritySignup() {
 
   const nextStep = () => {
     if (validateStep(step)) {
-      setStep(step + 1);
+      if (step === 1 && !emailVerified) {
+        // Show email verification popup before proceeding to step 2
+        setShowEmailVerification(true);
+      } else {
+        setStep(step + 1);
+      }
     }
+  };
+
+  const handleEmailVerificationSuccess = () => {
+    setEmailVerified(true);
+    setStep(step + 1);
   };
 
   const prevStep = () => {
@@ -167,8 +180,17 @@ export default function AuthoritySignup() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    
+
     if (!validateStep(3)) {
+      return;
+    }
+
+    if (!emailVerified) {
+      setSubmitStatus({
+        type: 'error',
+        message: 'Please verify your email before completing registration.'
+      });
+      setStep(1); // Go back to step 1 to verify email
       return;
     }
 
@@ -360,17 +382,27 @@ export default function AuthoritySignup() {
                       </div>
 
                       <div>
-                        <input
-                          type="email"
-                          name="email"
-                          value={formData.email}
-                          onChange={handleInputChange}
-                          placeholder="Official Email Address"
-                          className={`input-glass ${errors.email ? 'error-input' : ''}`}
-                          required
-                        />
+                        <div className="relative">
+                          <input
+                            type="email"
+                            name="email"
+                            value={formData.email}
+                            onChange={handleInputChange}
+                            placeholder="Official Email Address"
+                            className={`input-glass ${errors.email ? 'error-input' : ''} ${emailVerified ? 'verified-input' : ''}`}
+                            required
+                          />
+                          {emailVerified && (
+                            <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
+                              <CheckCircle className="w-5 h-5 text-green-400" />
+                            </div>
+                          )}
+                        </div>
                         {errors.email && (
                           <p className="error-text">{errors.email}</p>
+                        )}
+                        {emailVerified && (
+                          <p className="success-text">Email verified successfully!</p>
                         )}
                       </div>
 
@@ -395,7 +427,7 @@ export default function AuthoritySignup() {
                       onClick={nextStep}
                       className="btn-primary w-full"
                     >
-                      Continue
+                      {emailVerified ? 'Continue' : 'Verify Email & Continue'}
                     </button>
                   </div>
                 )}
@@ -593,6 +625,15 @@ export default function AuthoritySignup() {
             </div>
           </div>
         </div>
+
+        {/* Email Verification Popup */}
+        <EmailVerificationPopup
+          isOpen={showEmailVerification}
+          onClose={() => setShowEmailVerification(false)}
+          email={formData.email}
+          fullName={formData.fullName}
+          onVerificationSuccess={handleEmailVerificationSuccess}
+        />
       </div>
 
       <style jsx>{`
@@ -655,6 +696,23 @@ export default function AuthoritySignup() {
           font-size: 0.75rem;
           margin-top: 0.25rem;
           margin-left: 0.25rem;
+        }
+
+        .success-text {
+          color: #86efac;
+          font-size: 0.75rem;
+          margin-top: 0.25rem;
+          margin-left: 0.25rem;
+        }
+
+        /* Verified input styles */
+        .verified-input {
+          border-color: rgba(34, 197, 94, 0.6) !important;
+          background: rgba(34, 197, 94, 0.1);
+        }
+
+        .verified-input:focus {
+          box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.1);
         }
 
         /* Button styles */
