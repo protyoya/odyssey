@@ -1,14 +1,14 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  User, 
-  Edit, 
-  Save, 
-  X, 
-  Camera, 
-  Shield, 
-  Phone, 
-  Mail, 
-  MapPin, 
+import {
+  User,
+  Edit,
+  Save,
+  X,
+  Camera,
+  Shield,
+  Phone,
+  Mail,
+  MapPin,
   Calendar,
   Globe,
   Heart,
@@ -21,7 +21,12 @@ import {
   CheckCircle,
   Settings,
   FileText,
-  Plane
+  Plane,
+  ShieldCheck as VerifiedIcon,
+  Trash,
+  Contact,
+  MapPinned,
+  Navigation
 } from 'lucide-react';
 
 const OdysseyProfilePage = () => {
@@ -70,6 +75,16 @@ const OdysseyProfilePage = () => {
   });
 
   const [trips, setTrips] = useState([]);
+  const [emergencyContacts, setEmergencyContacts] = useState([]);
+  const [newContact, setNewContact] = useState({
+    name: '',
+    phone: '',
+    relationship: '',
+    email: ''
+  });
+  const [locationTracking, setLocationTracking] = useState(false);
+  const [currentLocation, setCurrentLocation] = useState(null);
+  const [kycStatus, setKycStatus] = useState('not_applied');
 
   const API_BASE_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3001';
 
@@ -112,6 +127,10 @@ const OdysseyProfilePage = () => {
             interests: []
           }
         });
+        setEmergencyContacts(data.data.emergencyContacts || []);
+        setLocationTracking(data.data.locationTrackingEnabled || false);
+        setCurrentLocation(data.data.currentLocation || null);
+        setKycStatus(data.data.kycStatus || 'not_applied');
       } else {
         setMessage({ type: 'error', text: data.message });
       }
@@ -266,9 +285,144 @@ const OdysseyProfilePage = () => {
     }
   };
 
+  // Emergency contact functions
+  const handleAddContact = async () => {
+    if (!newContact.name || !newContact.phone || !newContact.relationship) {
+      setMessage({ type: 'error', text: 'Please fill in all required fields' });
+      return;
+    }
+
+    try {
+      const token = localStorage.getItem('odyssey_token');
+      const response = await fetch(`${API_BASE_URL}/api/tour/profile/emergency-contacts`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(newContact)
+      });
+
+      const data = await response.json();
+      if (response.ok) {
+        setMessage({ type: 'success', text: 'Emergency contact added successfully' });
+        setNewContact({ name: '', phone: '', relationship: '', email: '' });
+        fetchProfile();
+      } else {
+        setMessage({ type: 'error', text: data.message });
+      }
+    } catch (error) {
+      setMessage({ type: 'error', text: 'Failed to add emergency contact' });
+    }
+  };
+
+  const handleDeleteContact = async (contactId) => {
+    try {
+      const token = localStorage.getItem('odyssey_token');
+      const response = await fetch(`${API_BASE_URL}/api/tour/profile/emergency-contacts/${contactId}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      if (response.ok) {
+        setMessage({ type: 'success', text: 'Emergency contact deleted successfully' });
+        fetchProfile();
+      }
+    } catch (error) {
+      setMessage({ type: 'error', text: 'Failed to delete emergency contact' });
+    }
+  };
+
+  // Location tracking functions
+  const toggleLocationTracking = async () => {
+    try {
+      const token = localStorage.getItem('odyssey_token');
+      const response = await fetch(`${API_BASE_URL}/api/tour/profile/location-tracking`, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ enabled: !locationTracking })
+      });
+
+      if (response.ok) {
+        setLocationTracking(!locationTracking);
+        setMessage({ type: 'success', text: `Location tracking ${!locationTracking ? 'enabled' : 'disabled'}` });
+
+        if (!locationTracking) {
+          startLocationTracking();
+        }
+      }
+    } catch (error) {
+      setMessage({ type: 'error', text: 'Failed to toggle location tracking' });
+    }
+  };
+
+  const startLocationTracking = () => {
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        async (position) => {
+          const locationData = {
+            latitude: position.coords.latitude,
+            longitude: position.coords.longitude,
+            accuracy: position.coords.accuracy
+          };
+
+          try {
+            const token = localStorage.getItem('odyssey_token');
+            await fetch(`${API_BASE_URL}/api/tour/profile/location`, {
+              method: 'POST',
+              headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json'
+              },
+              body: JSON.stringify(locationData)
+            });
+            setCurrentLocation(locationData);
+          } catch (error) {
+            console.error('Failed to update location:', error);
+          }
+        },
+        (error) => {
+          setMessage({ type: 'error', text: 'Unable to get your location' });
+        }
+      );
+    }
+  };
+
+  // KYC functions
+  const handleApplyKyc = async () => {
+    try {
+      const token = localStorage.getItem('odyssey_token');
+      const response = await fetch(`${API_BASE_URL}/api/tour/profile/kyc/apply`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      const data = await response.json();
+      if (response.ok) {
+        setMessage({ type: 'success', text: 'KYC application submitted successfully' });
+        setKycStatus('pending');
+      } else {
+        setMessage({ type: 'error', text: data.message });
+      }
+    } catch (error) {
+      setMessage({ type: 'error', text: 'Failed to submit KYC application' });
+    }
+  };
+
   const tabs = [
     { id: 'personal', name: 'Personal Info', icon: User },
     { id: 'security', name: 'Security', icon: Shield },
+    { id: 'emergency', name: 'Emergency Contacts', icon: Phone },
+    { id: 'location', name: 'Location & Safety', icon: MapPin },
+    { id: 'kyc', name: 'KYC Verification', icon: VerifiedIcon },
     { id: 'trips', name: 'My Trips', icon: Plane },
     { id: 'preferences', name: 'Preferences', icon: Settings }
   ];
@@ -802,6 +956,228 @@ const OdysseyProfilePage = () => {
                       ))
                     )}
                   </div>
+                </div>
+              )}
+
+              {activeTab === 'emergency' && (
+                <div className="space-y-6">
+                  <div className="flex items-center justify-between">
+                    <h2 className="text-2xl font-bold text-white">Emergency Contacts</h2>
+                  </div>
+
+                  {/* Add New Contact */}
+                  <div className="bg-gray-800/30 rounded-xl p-6 border border-gray-700/50">
+                    <h3 className="text-lg font-semibold text-white mb-4">Add Emergency Contact</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <input
+                        type="text"
+                        value={newContact.name}
+                        onChange={(e) => setNewContact({...newContact, name: e.target.value})}
+                        className="bg-gray-800/50 border border-gray-700/50 rounded-xl px-4 py-3 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500/50"
+                        placeholder="Full Name *"
+                      />
+                      <input
+                        type="tel"
+                        value={newContact.phone}
+                        onChange={(e) => setNewContact({...newContact, phone: e.target.value})}
+                        className="bg-gray-800/50 border border-gray-700/50 rounded-xl px-4 py-3 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500/50"
+                        placeholder="Phone Number *"
+                      />
+                      <input
+                        type="text"
+                        value={newContact.relationship}
+                        onChange={(e) => setNewContact({...newContact, relationship: e.target.value})}
+                        className="bg-gray-800/50 border border-gray-700/50 rounded-xl px-4 py-3 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500/50"
+                        placeholder="Relationship *"
+                      />
+                      <input
+                        type="email"
+                        value={newContact.email}
+                        onChange={(e) => setNewContact({...newContact, email: e.target.value})}
+                        className="bg-gray-800/50 border border-gray-700/50 rounded-xl px-4 py-3 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500/50"
+                        placeholder="Email (optional)"
+                      />
+                    </div>
+                    <div className="mt-4">
+                      <button
+                        onClick={handleAddContact}
+                        className="flex items-center space-x-2 bg-gradient-to-r from-purple-500 to-blue-500 text-white px-6 py-3 rounded-xl hover:from-purple-600 hover:to-blue-600 transition-all duration-300"
+                      >
+                        <Plus className="w-4 h-4" />
+                        <span>Add Contact</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Contact List */}
+                  <div className="space-y-4">
+                    {emergencyContacts.length === 0 ? (
+                      <div className="text-center py-12 text-gray-400">
+                        <Contact className="w-16 h-16 mx-auto mb-4 opacity-50" />
+                        <p>No emergency contacts added yet.</p>
+                      </div>
+                    ) : (
+                      emergencyContacts.map((contact, index) => (
+                        <div key={contact._id || index} className="bg-gray-800/30 rounded-xl p-6 border border-gray-700/50">
+                          <div className="flex items-start justify-between">
+                            <div className="flex-1">
+                              <h3 className="text-lg font-semibold text-white mb-2">{contact.name}</h3>
+                              <div className="space-y-2 text-gray-300">
+                                <p className="flex items-center space-x-2">
+                                  <Phone className="w-4 h-4 text-green-400" />
+                                  <span>{contact.phone}</span>
+                                </p>
+                                <p className="flex items-center space-x-2">
+                                  <Heart className="w-4 h-4 text-red-400" />
+                                  <span>{contact.relationship}</span>
+                                </p>
+                                {contact.email && (
+                                  <p className="flex items-center space-x-2">
+                                    <Mail className="w-4 h-4 text-blue-400" />
+                                    <span>{contact.email}</span>
+                                  </p>
+                                )}
+                              </div>
+                            </div>
+                            <button
+                              onClick={() => handleDeleteContact(contact._id)}
+                              className="text-red-400 hover:text-red-300 p-2 rounded-lg hover:bg-red-500/10 transition-colors"
+                            >
+                              <Trash className="w-5 h-5" />
+                            </button>
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {activeTab === 'location' && (
+                <div className="space-y-6">
+                  <div className="flex items-center justify-between">
+                    <h2 className="text-2xl font-bold text-white">Location & Safety</h2>
+                  </div>
+
+                  {/* Location Tracking */}
+                  <div className="bg-gray-800/30 rounded-xl p-6 border border-gray-700/50">
+                    <div className="flex items-center justify-between mb-4">
+                      <div>
+                        <h3 className="text-lg font-semibold text-white">Location Tracking</h3>
+                        <p className="text-gray-400 text-sm">Allow authorities to track your location for safety purposes</p>
+                      </div>
+                      <button
+                        onClick={toggleLocationTracking}
+                        className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                          locationTracking ? 'bg-purple-500' : 'bg-gray-600'
+                        }`}
+                      >
+                        <span
+                          className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                            locationTracking ? 'translate-x-6' : 'translate-x-1'
+                          }`}
+                        />
+                      </button>
+                    </div>
+
+                    {locationTracking && currentLocation && (
+                      <div className="mt-4 p-4 bg-green-500/10 border border-green-500/20 rounded-xl">
+                        <div className="flex items-center space-x-2 mb-2">
+                          <Navigation className="w-5 h-5 text-green-400" />
+                          <span className="text-green-400 font-medium">Location Tracking Active</span>
+                        </div>
+                        <p className="text-gray-300 text-sm">
+                          Current location: {currentLocation.latitude?.toFixed(4)}, {currentLocation.longitude?.toFixed(4)}
+                        </p>
+                        <p className="text-gray-400 text-xs mt-1">
+                          Accuracy: {currentLocation.accuracy ? `${Math.round(currentLocation.accuracy)}m` : 'Unknown'}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {activeTab === 'kyc' && (
+                <div className="space-y-6">
+                  <div className="flex items-center justify-between">
+                    <h2 className="text-2xl font-bold text-white">KYC Verification</h2>
+                  </div>
+
+                  {/* KYC Status */}
+                  <div className="bg-gray-800/30 rounded-xl p-6 border border-gray-700/50">
+                    <h3 className="text-lg font-semibold text-white mb-4">Verification Status</h3>
+                    <div className="flex items-center space-x-3">
+                      <div className={`w-3 h-3 rounded-full ${
+                        kycStatus === 'approved' ? 'bg-green-400' :
+                        kycStatus === 'pending' ? 'bg-yellow-400' :
+                        kycStatus === 'rejected' ? 'bg-red-400' : 'bg-gray-400'
+                      }`}></div>
+                      <span className="text-gray-300 capitalize">
+                        {kycStatus === 'not_applied' ? 'Not Applied' : kycStatus}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* KYC Actions */}
+                  {kycStatus === 'not_applied' && (
+                    <div className="bg-gray-800/30 rounded-xl p-6 border border-gray-700/50">
+                      <h3 className="text-lg font-semibold text-white mb-4">Apply for Verification</h3>
+                      <p className="text-gray-400 mb-4">
+                        Complete your profile to apply for KYC verification. This helps authorities verify your identity and ensures better safety.
+                      </p>
+                      <button
+                        onClick={handleApplyKyc}
+                        className="flex items-center space-x-2 bg-gradient-to-r from-purple-500 to-blue-500 text-white px-6 py-3 rounded-xl hover:from-purple-600 hover:to-blue-600 transition-all duration-300"
+                      >
+                        <VerifiedIcon className="w-4 h-4" />
+                        <span>Apply for KYC</span>
+                      </button>
+                    </div>
+                  )}
+
+                  {kycStatus === 'pending' && (
+                    <div className="bg-yellow-500/10 border border-yellow-500/20 rounded-xl p-6">
+                      <div className="flex items-center space-x-2 mb-2">
+                        <AlertCircle className="w-5 h-5 text-yellow-400" />
+                        <span className="text-yellow-400 font-medium">Application Under Review</span>
+                      </div>
+                      <p className="text-gray-300">
+                        Your KYC application is being reviewed by authorities. You will be notified once the verification is complete.
+                      </p>
+                    </div>
+                  )}
+
+                  {kycStatus === 'approved' && (
+                    <div className="bg-green-500/10 border border-green-500/20 rounded-xl p-6">
+                      <div className="flex items-center space-x-2 mb-2">
+                        <CheckCircle className="w-5 h-5 text-green-400" />
+                        <span className="text-green-400 font-medium">Verification Completed</span>
+                      </div>
+                      <p className="text-gray-300">
+                        Your identity has been successfully verified. You now have access to all features.
+                      </p>
+                    </div>
+                  )}
+
+                  {kycStatus === 'rejected' && (
+                    <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-6">
+                      <div className="flex items-center space-x-2 mb-2">
+                        <X className="w-5 h-5 text-red-400" />
+                        <span className="text-red-400 font-medium">Verification Rejected</span>
+                      </div>
+                      <p className="text-gray-300 mb-4">
+                        Your KYC application was rejected. Please update your profile information and reapply.
+                      </p>
+                      <button
+                        onClick={handleApplyKyc}
+                        className="flex items-center space-x-2 bg-gradient-to-r from-purple-500 to-blue-500 text-white px-6 py-3 rounded-xl hover:from-purple-600 hover:to-blue-600 transition-all duration-300"
+                      >
+                        <VerifiedIcon className="w-4 h-4" />
+                        <span>Reapply for KYC</span>
+                      </button>
+                    </div>
+                  )}
                 </div>
               )}
 

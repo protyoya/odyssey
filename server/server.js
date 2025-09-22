@@ -12,6 +12,10 @@ const corsOptions = {
   origin: [
     'http://localhost:5200',
     'http://localhost:5100',
+    'http://localhost:3000',
+    'http://localhost:3001',
+    'http://localhost:4000',
+    'http://localhost:8080',
   ],
   credentials: true,
 };

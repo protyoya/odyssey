@@ -442,4 +442,326 @@ router.put('/passport', authenticateToken, async (req, res) => {
   }
 });
 
+// @route POST /api/profile/emergency-contacts
+// @desc Add emergency contact
+// @access Private
+router.post('/emergency-contacts', authenticateToken, async (req, res) => {
+  try {
+    const { name, phone, relationship, email } = req.body;
+
+    if (!name || !phone || !relationship) {
+      return res.status(400).json({
+        message: 'Name, phone, and relationship are required'
+      });
+    }
+
+    const tourist = await Tourist.findById(req.user.id);
+    if (!tourist) {
+      return res.status(404).json({
+        message: 'User not found'
+      });
+    }
+
+    const newContact = { name, phone, relationship, email };
+    tourist.emergencyContacts.push(newContact);
+    await tourist.save();
+
+    res.status(201).json({
+      success: true,
+      message: 'Emergency contact added successfully',
+      data: newContact
+    });
+
+  } catch (error) {
+    console.error('Add emergency contact error:', error);
+    res.status(500).json({
+      message: 'Server error adding emergency contact',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+});
+
+// @route PUT /api/profile/emergency-contacts/:contactId
+// @desc Update emergency contact
+// @access Private
+router.put('/emergency-contacts/:contactId', authenticateToken, async (req, res) => {
+  try {
+    const { contactId } = req.params;
+    const updates = req.body;
+
+    const tourist = await Tourist.findById(req.user.id);
+    if (!tourist) {
+      return res.status(404).json({
+        message: 'User not found'
+      });
+    }
+
+    const contact = tourist.emergencyContacts.id(contactId);
+    if (!contact) {
+      return res.status(404).json({
+        message: 'Emergency contact not found'
+      });
+    }
+
+    Object.keys(updates).forEach(key => {
+      if (updates[key] !== undefined) {
+        contact[key] = updates[key];
+      }
+    });
+
+    await tourist.save();
+
+    res.status(200).json({
+      success: true,
+      message: 'Emergency contact updated successfully',
+      data: contact
+    });
+
+  } catch (error) {
+    console.error('Update emergency contact error:', error);
+    res.status(500).json({
+      message: 'Server error updating emergency contact',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+});
+
+// @route DELETE /api/profile/emergency-contacts/:contactId
+// @desc Delete emergency contact
+// @access Private
+router.delete('/emergency-contacts/:contactId', authenticateToken, async (req, res) => {
+  try {
+    const { contactId } = req.params;
+
+    const tourist = await Tourist.findById(req.user.id);
+    if (!tourist) {
+      return res.status(404).json({
+        message: 'User not found'
+      });
+    }
+
+    const contact = tourist.emergencyContacts.id(contactId);
+    if (!contact) {
+      return res.status(404).json({
+        message: 'Emergency contact not found'
+      });
+    }
+
+    contact.deleteOne();
+    await tourist.save();
+
+    res.status(200).json({
+      success: true,
+      message: 'Emergency contact deleted successfully'
+    });
+
+  } catch (error) {
+    console.error('Delete emergency contact error:', error);
+    res.status(500).json({
+      message: 'Server error deleting emergency contact',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+});
+
+// @route POST /api/profile/location
+// @desc Update current location
+// @access Private
+router.post('/location', authenticateToken, async (req, res) => {
+  try {
+    const { latitude, longitude, accuracy, address } = req.body;
+
+    if (!latitude || !longitude) {
+      return res.status(400).json({
+        message: 'Latitude and longitude are required'
+      });
+    }
+
+    const tourist = await Tourist.findById(req.user.id);
+    if (!tourist) {
+      return res.status(404).json({
+        message: 'User not found'
+      });
+    }
+
+    if (!tourist.locationTrackingEnabled) {
+      return res.status(403).json({
+        message: 'Location tracking is disabled'
+      });
+    }
+
+    const locationData = {
+      latitude,
+      longitude,
+      accuracy,
+      address,
+      timestamp: new Date()
+    };
+
+    tourist.currentLocation = locationData;
+
+    if (tourist.locationHistory.length >= 100) {
+      tourist.locationHistory.shift();
+    }
+    tourist.locationHistory.push(locationData);
+
+    await tourist.save();
+
+    res.status(200).json({
+      success: true,
+      message: 'Location updated successfully'
+    });
+
+  } catch (error) {
+    console.error('Location update error:', error);
+    res.status(500).json({
+      message: 'Server error updating location',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+});
+
+// @route PUT /api/profile/location-tracking
+// @desc Toggle location tracking
+// @access Private
+router.put('/location-tracking', authenticateToken, async (req, res) => {
+  try {
+    const { enabled } = req.body;
+
+    if (typeof enabled !== 'boolean') {
+      return res.status(400).json({
+        message: 'Enabled field must be a boolean'
+      });
+    }
+
+    const tourist = await Tourist.findByIdAndUpdate(
+      req.user.id,
+      { locationTrackingEnabled: enabled },
+      { new: true }
+    ).select('-password');
+
+    if (!tourist) {
+      return res.status(404).json({
+        message: 'User not found'
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      message: `Location tracking ${enabled ? 'enabled' : 'disabled'} successfully`,
+      data: { locationTrackingEnabled: tourist.locationTrackingEnabled }
+    });
+
+  } catch (error) {
+    console.error('Location tracking toggle error:', error);
+    res.status(500).json({
+      message: 'Server error toggling location tracking',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+});
+
+// @route POST /api/profile/kyc/apply
+// @desc Apply for KYC verification
+// @access Private
+router.post('/kyc/apply', authenticateToken, async (req, res) => {
+  try {
+    const tourist = await Tourist.findById(req.user.id);
+    if (!tourist) {
+      return res.status(404).json({
+        message: 'User not found'
+      });
+    }
+
+    if (tourist.kycStatus === 'pending') {
+      return res.status(400).json({
+        message: 'KYC application is already pending'
+      });
+    }
+
+    if (tourist.kycStatus === 'approved') {
+      return res.status(400).json({
+        message: 'KYC is already verified'
+      });
+    }
+
+    const requiredFields = ['fullName', 'phone', 'nationality', 'dateOfBirth', 'gender'];
+    const missingFields = requiredFields.filter(field => !tourist[field]);
+
+    if (missingFields.length > 0) {
+      return res.status(400).json({
+        message: 'Profile incomplete. Please fill all required fields',
+        missingFields
+      });
+    }
+
+    tourist.kycStatus = 'pending';
+    tourist.kycAppliedAt = new Date();
+    tourist.kycRejectionReason = undefined;
+    await tourist.save();
+
+    res.status(200).json({
+      success: true,
+      message: 'KYC application submitted successfully'
+    });
+
+  } catch (error) {
+    console.error('KYC apply error:', error);
+    res.status(500).json({
+      message: 'Server error submitting KYC application',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+});
+
+// @route GET /api/profile/completion
+// @desc Get profile completion percentage
+// @access Private
+router.get('/completion', authenticateToken, async (req, res) => {
+  try {
+    const tourist = await Tourist.findById(req.user.id).select('-password');
+    if (!tourist) {
+      return res.status(404).json({
+        message: 'User not found'
+      });
+    }
+
+    const requiredFields = [
+      'fullName', 'phone', 'nationality', 'passportNumber',
+      'dateOfBirth', 'gender', 'address.country', 'address.city'
+    ];
+
+    let completedFields = 0;
+    requiredFields.forEach(field => {
+      const fieldValue = field.includes('.')
+        ? field.split('.').reduce((obj, key) => obj?.[key], tourist)
+        : tourist[field];
+
+      if (fieldValue) completedFields++;
+    });
+
+    const completionPercentage = Math.round((completedFields / requiredFields.length) * 100);
+
+    tourist.profileCompletionPercentage = completionPercentage;
+    await tourist.save();
+
+    res.status(200).json({
+      success: true,
+      data: {
+        completionPercentage,
+        completedFields,
+        totalFields: requiredFields.length,
+        canApplyKyc: completionPercentage === 100
+      }
+    });
+
+  } catch (error) {
+    console.error('Profile completion error:', error);
+    res.status(500).json({
+      message: 'Server error calculating profile completion',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+});
+
 module.exports = router
